@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
+use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
 use winit::platform::run_return::EventLoopExtRunReturn;
 use winit::window::WindowBuilder;
 
@@ -19,7 +19,7 @@ impl Window {
         resizable: Option<bool>,
         visible: Option<bool>,
     ) -> Result<Window> {
-        let event_loop = EventLoop::new();
+        let event_loop = EventLoopBuilder::new().build();
         let handle = WindowBuilder::new()
             .with_title(title)
             .with_inner_size(LogicalSize::new(size.0, size.1))
@@ -41,7 +41,7 @@ impl Window {
     pub fn size(&self) -> (u32, u32) {
         self.handle.inner_size().into()
     }
-    
+
     pub fn handle(&self) -> &Arc<winit::window::Window> {
         &self.handle
     }
