@@ -4,7 +4,6 @@ use anyhow::Result;
 use std::sync::Arc;
 use vulkano::image::{ImageUsage, SwapchainImage};
 use vulkano::swapchain::{Swapchain, SwapchainCreateInfo};
-use vulkano_win::create_surface_from_winit;
 
 pub struct VkSurface {
     window: Window,
@@ -14,8 +13,11 @@ pub struct VkSurface {
 
 impl VkSurface {
     pub fn new(window: Window, core: &VkCore) -> Result<VkSurface> {
-        let handle = create_surface_from_winit(window.handle().clone(), core.instance().clone())
-            .expect("Failed to create surface");
+        let handle = vulkano_win::create_surface_from_winit(
+            window.handle().clone(),
+            core.instance().clone(),
+        )
+        .expect("Failed to create surface");
 
         let capabilities = core.query_surface_capabilities(&handle)?;
 

@@ -10,7 +10,6 @@ use vulkano::format::Format;
 use vulkano::instance::{Instance, InstanceCreateInfo};
 use vulkano::swapchain::{ColorSpace, Surface, SurfaceCapabilities, SurfaceInfo};
 use vulkano::VulkanLibrary;
-use vulkano_win::create_surface_from_winit;
 
 pub struct VkCore {
     instance: Arc<Instance>,
@@ -37,50 +36,15 @@ impl VkCore {
             ..DeviceExtensions::empty()
         };
 
-        let surface = create_surface_from_winit(window.handle().clone(), instance.clone())
-            .expect("Failed to create surface");
+        let surface =
+            vulkano_win::create_surface_from_winit(window.handle().clone(), instance.clone())
+                .expect("Failed to create surface");
 
-        let (physical_device, queue_index) = instance
-            .enumerate_physical_devices()?
-            .filter(|device| device.supported_extensions().contains(&enabled_extensions))
-            .filter_map(|device| {
-                device
-                    .queue_family_properties()
-                    .iter()
-                    .enumerate()
-                    .position(|(index, queue)| {
-                        queue.queue_flags.graphics
-                            && device
-                                .surface_support(index as u32, &surface)
-                                .unwrap_or(false)
-                    })
-                    .map(|queue| (device, queue as u32))
-            })
-            .max_by_key(|(device, _)| match device.properties().device_type {
-                PhysicalDeviceType::DiscreteGpu => 4,
-                PhysicalDeviceType::IntegratedGpu => 3,
-                PhysicalDeviceType::VirtualGpu => 2,
-                PhysicalDeviceType::Cpu => 1,
-                _ => 0,
-            })
-            .expect("No supported device found");
+        let (physical_device, queue_index) =
+            Self::choose_physical_device(&instance, &enabled_extensions, surface)?;
 
-        let (device, mut queue) = {
-            let enabled_features = Features::empty();
-
-            Device::new(
-                physical_device,
-                DeviceCreateInfo {
-                    enabled_extensions,
-                    enabled_features,
-                    queue_create_infos: vec![QueueCreateInfo {
-                        queue_family_index: queue_index,
-                        ..QueueCreateInfo::default()
-                    }],
-                    ..DeviceCreateInfo::default()
-                },
-            )?
-        };
+        let (device, mut queue) =
+            Self::create_device(physical_device, enabled_extensions, queue_index)?;
 
         let queue = queue.next().unwrap();
 
@@ -121,5 +85,63 @@ impl VkCore {
         for physical_device in self.instance.enumerate_physical_devices().unwrap() {
             println!("Device: {}", physical_device.properties().device_name);
         }
+    }
+
+    fn choose_physical_device(
+        instance: &Arc<Instance>,
+        enabled_extensions: &DeviceExtensions,
+        surface: Arc<Surface>,
+    ) -> Result<(Arc<vulkano::device::physical::PhysicalDevice>, u32)> {
+        let (physical_device, queue_index) = instance
+            .enumerate_physical_devices()?
+            .filter(|device| device.supported_extensions().contains(enabled_extensions))
+            .filter_map(|device| {
+                device
+                    .queue_family_properties()
+                    .iter()
+                    .enumerate()
+                    .position(|(index, queue)| {
+                        queue.queue_flags.graphics
+                            && device
+                                .surface_support(index as u32, &surface)
+                                .unwrap_or(false)
+                    })
+                    .map(|queue| (device, queue as u32))
+            })
+            .max_by_key(|(device, _)| match device.properties().device_type {
+                PhysicalDeviceType::DiscreteGpu => 4,
+                PhysicalDeviceType::IntegratedGpu => 3,
+                PhysicalDeviceType::VirtualGpu => 2,
+                PhysicalDeviceType::Cpu => 1,
+                _ => 0,
+            })
+            .expect("No supported device found");
+
+        Ok((physical_device, queue_index))
+    }
+
+    fn create_device(
+        physical_device: Arc<vulkano::device::physical::PhysicalDevice>,
+        enabled_extensions: DeviceExtensions,
+        queue_index: u32,
+    ) -> Result<(Arc<Device>, impl ExactSizeIterator<Item = Arc<Queue>>)> {
+        let (device, queue) = {
+            let enabled_features = Features::empty();
+
+            Device::new(
+                physical_device,
+                DeviceCreateInfo {
+                    enabled_extensions,
+                    enabled_features,
+                    queue_create_infos: vec![QueueCreateInfo {
+                        queue_family_index: queue_index,
+                        ..QueueCreateInfo::default()
+                    }],
+                    ..DeviceCreateInfo::default()
+                },
+            )?
+        };
+
+        Ok((device, queue))
     }
 }
